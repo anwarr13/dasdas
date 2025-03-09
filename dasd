@@ -1,0 +1,2182 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:login_form/main.dart';
+import 'package:login_form/mood_category.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'change_password_screen.dart';
+import 'editprofilescreen.dart';
+import 'package:location/location.dart' as loc;
+import 'package:geocoding/geocoding.dart' as geocoding;
+import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
+
+// Bar class to store data for each bar
+class Bar {
+  final String name;
+  final String description;
+  final String imageUrl;
+  final String address;
+  final String operatingHours;
+  final List<String> features;
+  final String contactNumber;
+  final LatLng? location;
+  final double rating;
+  final int reviewCount;
+
+  Bar({
+    required this.name,
+    required this.description,
+    required this.imageUrl,
+    required this.address,
+    required this.operatingHours,
+    required this.features,
+    required this.contactNumber,
+    this.location,
+    this.rating = 0.0,
+    this.reviewCount = 0,
+  });
+}
+
+class DashboardScreen extends StatefulWidget {
+  final List<String>? selectedFeatures;
+
+  const DashboardScreen({
+    Key? key,
+    this.selectedFeatures,
+  }) : super(key: key);
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  int _selectedIndex = 0; // Default to the Locations tab
+  String username = ''; // Default username
+  String userEmail = ''; // Default user email
+  File? _imageFile; // User profile picture file
+  String? _profileImagePath;
+  DateTime? _lastProfileUpdate;
+  GoogleMapController? mapController;
+
+  // Location Controller
+  loc.Location _locationController = loc.Location();
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Set<Marker> _markers = {};
+  bool _isLoading = true;
+  List<String>? _selectedFeatures;
+
+  // Initial camera position (Ipil, Zamboanga Sibugay - centered on downtown)
+  static const CameraPosition _kGooglePlex = CameraPosition(
+    target: LatLng(7.7844, 122.5872), // Ipil downtown coordinates
+    zoom: 14.5, // Adjusted zoom to show more of the town
+  );
+
+  // Add this field
+  String displayName = '';
+
+  String _searchQuery = '';
+  List<DocumentSnapshot> _bars = [];
+
+
+  void _onMapCreated(GoogleMapController controller) async {
+    setState(() {
+      mapController = controller;
+    });
+    // Load approved bars and their markers
+    await _loadApprovedBars();
+  }
+
+  void _showAllMarkers() {
+    if (_markers.isEmpty || mapController == null) return;
+
+    LatLngBounds bounds = _getBounds(_markers);
+    mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, 100),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFeatures = widget.selectedFeatures;
+    _loadUserData();
+    _setupUserListener(); // Add user listener
+    getUserLocationUpdates();
+    _loadApprovedBars(); // Load approved bars after initialization
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showAllMarkers(); // Add marker after frame is built
+    });
+  }
+
+  @override
+  void dispose() {
+    _userSubscription?.cancel(); // Cancel subscription
+    super.dispose();
+  }
+
+  // Setup real-time user data listener
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userSubscription;
+
+  void _setupUserListener() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _userSubscription = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots()
+          .listen((DocumentSnapshot<Map<String, dynamic>> snapshot) {
+        if (snapshot.exists) {
+          setState(() {
+            displayName =
+                snapshot.data()?['name'] ?? _formatEmailToName(userEmail);
+            username = displayName;
+
+            // Update profile picture if changed
+            String? profilePicUrl = snapshot.data()?['profileImagePath'];
+            String? lastUpdateStr = snapshot.data()?['profileImageLastUpdated'];
+
+            if (profilePicUrl != null && lastUpdateStr != null) {
+              final lastUpdate = DateTime.parse(lastUpdateStr);
+
+              // Only update if we have a new image or if this is a fresh load
+              if (_profileImagePath != profilePicUrl ||
+                  _lastProfileUpdate == null ||
+                  lastUpdate.isAfter(_lastProfileUpdate!)) {
+                _profileImagePath = profilePicUrl;
+                _lastProfileUpdate = lastUpdate;
+                _loadProfilePicture(profilePicUrl);
+              }
+            }
+          });
+        }
+      });
+    }
+  }
+        // Used for loading Profile Picture
+  Future<void> _loadProfilePicture(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) {
+        if (mounted) {
+          setState(() => _imageFile = file);
+        }
+      }
+    } catch (e) {
+      print('Error loading profile picture: $e');
+    }
+  }
+
+  Future<void> _loadApprovedBars() async {
+    setState(() => _isLoading = true);
+    try {
+      // Get all approved bars from Firestore
+      var query = FirebaseFirestore.instance
+          .collection('bars')
+          .where('status', isEqualTo: 'approved');
+
+      final QuerySnapshot barSnapshot = await query.get();
+
+      List<Bar> loadedBars = [];
+      Set<Marker> newMarkers = {};
+
+      for (var doc in barSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+
+        // Get bar features
+        List<String> barFeatures = List<String>.from(data['features'] ?? []);
+
+        // Skip this bar if it doesn't match user preferences
+        if (_selectedFeatures != null && _selectedFeatures!.isNotEmpty) {
+          bool hasMatchingFeature = false;
+          for (String feature in _selectedFeatures!) {
+            if (barFeatures.contains(feature)) {
+              hasMatchingFeature = true;
+              break;
+            }
+          }
+          if (!hasMatchingFeature) continue;
+        }
+
+        // Construct full address
+        String fullAddress = [
+          data['streetAddress'] ?? '',
+          data['barangay'] ?? '',
+          data['municipality'] ?? '',
+          data['province'] ?? '',
+        ].where((part) => part.isNotEmpty).join(', ');
+
+        // Get location data
+        GeoPoint? geoPoint = data['location'] as GeoPoint?;
+        LatLng? location;
+        if (geoPoint != null) {
+          location = LatLng(geoPoint.latitude, geoPoint.longitude);
+        }
+
+        // Create Bar object from Firestore data
+        Bar bar = Bar(
+          name: data['barName'] ?? '',
+          description: data['description'] ?? 'No description available',
+          imageUrl: data['profileImagePath'] ?? 'assets/default_bar.jpg',
+          address: fullAddress,
+          operatingHours: data['operatingHours'] ?? 'Hours not specified',
+          features: barFeatures,
+          contactNumber: data['contactNumber'] ?? '',
+          location: location,
+          rating: (data['rating'] ?? 0.0).toDouble(),
+          reviewCount: (data['reviewCount'] ?? 0) as int,
+        );
+
+        if (location != null) {
+          // Create marker for the bar
+          final marker = Marker(
+            markerId: MarkerId(doc.id),
+            position: location,
+            infoWindow: InfoWindow(title: bar.name),
+            icon:
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => Dialog(
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header with close button
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              bar.name,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Handlee',
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(context),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Description
+                        Text(
+                          bar.description,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Address
+                        Text(
+                          'Address: ${bar.address}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // Hours
+                        Text(
+                          'Hours: ${bar.operatingHours}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // Contact
+                        Text(
+                          'Contact: ${bar.contactNumber}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Features
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: bar.features.map((feature) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                feature,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 20),
+                        // Get Directions Button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              if (bar.location != null) {
+                                _showDirectionsDialog(bar.location!, bar.name);
+                              }
+                            },
+                            child: const Text(
+                              'Get Directions',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+          newMarkers.add(marker);
+        } else if (data['streetAddress'] != null &&
+            data['streetAddress'].isNotEmpty) {
+          try {
+            String address = [
+              data['streetAddress'],
+              data['barangay'],
+              data['municipality'],
+              data['province'],
+            ].where((part) => part != null && part.isNotEmpty).join(', ');
+
+            List<geocoding.Location> locations =
+                await geocoding.locationFromAddress(address);
+
+            if (locations.isNotEmpty) {
+              Bar bar = Bar(
+                name: data['barName'] ?? '',
+                description: data['description'] ?? 'No description available',
+                imageUrl: data['profileImagePath'] ?? 'assets/default_bar.jpg',
+                address: address,
+                operatingHours: data['operatingHours'] ?? 'Hours not specified',
+                features: List<String>.from(data['features'] ?? []),
+                contactNumber: data['contactNumber'] ?? '',
+                location:
+                    LatLng(locations.first.latitude, locations.first.longitude),
+                rating: (data['rating'] ?? 0.0).toDouble(),
+                reviewCount: (data['reviewCount'] ?? 0) as int,
+              );
+              _addMarkerForBar(bar);
+            }
+          } catch (e) {
+            print('Error geocoding address for ${data['barName']}: $e');
+          }
+        }
+
+        loadedBars.add(bar);
+      }
+
+      if (mounted) {
+        setState(() {
+          _markers = newMarkers;
+          _isLoading = false;
+        });
+
+        // Show all markers on the map
+        if (newMarkers.isNotEmpty) {
+          _showAllMarkers();
+        }
+      }
+    } catch (e) {
+      print('Error loading approved bars: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  LatLngBounds _getBounds(Set<Marker> markers) {
+    if (markers.isEmpty) {
+      return LatLngBounds(
+        southwest: const LatLng(7.7844, 122.5872),
+        northeast: const LatLng(7.7844, 122.5872),
+      );
+    }
+
+    double minLat = markers.first.position.latitude;
+    double maxLat = markers.first.position.latitude;
+    double minLng = markers.first.position.longitude;
+    double maxLng = markers.first.position.longitude;
+
+    for (Marker marker in markers) {
+      if (marker.position.latitude < minLat) minLat = marker.position.latitude;
+      if (marker.position.latitude > maxLat) maxLat = marker.position.latitude;
+      if (marker.position.longitude < minLng)
+        minLng = marker.position.longitude;
+      if (marker.position.longitude > maxLng)
+        maxLng = marker.position.longitude;
+    }
+
+    return LatLngBounds(
+      southwest: LatLng(minLat - 0.01, minLng - 0.01), // Add padding
+      northeast: LatLng(maxLat + 0.01, maxLng + 0.01), // Add padding
+    );
+  }
+
+  Future<void> _launchMapsUrl(LatLng destination, String mode) async {
+    final currentLocation = await _getCurrentLocation();
+    if (currentLocation == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to get your current location')),
+        );
+      }
+      return;
+    }
+
+    final origin = '${currentLocation.latitude},${currentLocation.longitude}';
+    final dest = '${destination.latitude},${destination.longitude}';
+    final modeParam = mode == 'drive'
+        ? 'driving'
+        : mode == 'motor'
+            ? 'driving'
+            : 'walking';
+
+    final url = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$dest&travelmode=$modeParam');
+
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      } else {
+        throw 'Could not launch maps';
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open maps application')),
+        );
+      }
+    }
+  }
+
+  Future<LatLng?> _getCurrentLocation() async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high);
+      return LatLng(position.latitude, position.longitude);
+    } catch (e) {
+      print('Error getting current location: $e');
+      return null;
+    }
+  }
+
+  void _showDirectionsDialog(LatLng destination, String barName) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: Text('Get Directions to $barName'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.directions_walk),
+              title: const Text('Walk there'),
+              onTap: () {
+                Navigator.pop(context);
+                _launchMapsUrl(destination, 'walking');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.directions_car),
+              title: const Text('Drive there'),
+              onTap: () {
+                Navigator.pop(context);
+                _launchMapsUrl(destination, 'drive');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.motorcycle),
+              title: const Text('Ride there'),
+              onTap: () {
+                Navigator.pop(context);
+                _launchMapsUrl(destination, 'motor');
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  LatLng? _currentPosition;
+  LatLng? _destinationLocation;
+  Set<Polyline> _polylines = {};
+
+  Future<void> _initializeLocations() async {
+    try {
+      _markers.clear();
+
+      var snapshot = await FirebaseFirestore.instance
+          .collection('bars')
+          .where('status', isEqualTo: 'approved')
+          .get();
+
+      for (var doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          GeoPoint? geoPoint = data['location'] as GeoPoint?;
+
+          if (geoPoint != null) {
+            String fullAddress = [
+              data['streetAddress'] ?? '',
+              data['barangay'] ?? '',
+              data['municipality'] ?? '',
+              data['province'] ?? '',
+            ].where((part) => part.isNotEmpty).join(', ');
+
+            Bar bar = Bar(
+              name: data['barName'] ?? '',
+              description: data['description'] ?? 'No description available',
+              imageUrl: data['profileImagePath'] ?? 'assets/default_bar.jpg',
+              address: fullAddress,
+              operatingHours: data['operatingHours'] ?? 'Hours not specified',
+              features: List<String>.from(data['features'] ?? []),
+              contactNumber: data['contactNumber'] ?? '',
+              location: LatLng(geoPoint.latitude, geoPoint.longitude),
+              rating: (data['rating'] ?? 0.0).toDouble(),
+              reviewCount: (data['reviewCount'] ?? 0) as int,
+            );
+
+            _addMarkerForBar(bar);
+          } else if (data['streetAddress'] != null &&
+              data['streetAddress'].isNotEmpty) {
+            try {
+              String address = [
+                data['streetAddress'],
+                data['barangay'],
+                data['municipality'],
+                data['province'],
+              ].where((part) => part != null && part.isNotEmpty).join(', ');
+
+              List<geocoding.Location> locations =
+                  await geocoding.locationFromAddress(address);
+
+              if (locations.isNotEmpty) {
+                Bar bar = Bar(
+                  name: data['barName'] ?? '',
+                  description:
+                      data['description'] ?? 'No description available',
+                  imageUrl:
+                      data['profileImagePath'] ?? 'assets/default_bar.jpg',
+                  address: address,
+                  operatingHours:
+                      data['operatingHours'] ?? 'Hours not specified',
+                  features: List<String>.from(data['features'] ?? []),
+                  contactNumber: data['contactNumber'] ?? '',
+                  location: LatLng(
+                      locations.first.latitude, locations.first.longitude),
+                  rating: (data['rating'] ?? 0.0).toDouble(),
+                  reviewCount: (data['reviewCount'] ?? 0) as int,
+                );
+                _addMarkerForBar(bar);
+              }
+            } catch (e) {
+              print('Error geocoding address for ${data['barName']}: $e');
+            }
+          }
+        } catch (e) {
+          print('Error processing bar document ${doc.id}: $e');
+          continue;
+        }
+      }
+
+      if (_markers.isNotEmpty && mapController != null) {
+        _fitBoundsForMarkers();
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('Error initializing locations: $e');
+    }
+  }
+
+  void _addMarkerForBar(Bar bar) {
+    if (bar.location == null) return;
+
+    setState(() {
+      _markers.add(
+        Marker(
+          markerId: MarkerId(bar.name),
+          position: bar.location!,
+          infoWindow: InfoWindow(
+            title: bar.name,
+            snippet: bar.description.length > 50
+                ? '${bar.description.substring(0, 47)}...'
+                : bar.description,
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          onTap: () {
+            if (bar.location != null) {
+              _showDirectionsDialog(bar.location!, bar.name);
+            }
+          },
+        ),
+      );
+    });
+  }
+
+  void _centerOnUserLocation() async {
+    try {
+      final loc.LocationData? currentLocation =
+          await _locationController.getLocation();
+      if (currentLocation != null && mapController != null && mounted) {
+        mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target:
+                  LatLng(currentLocation.latitude!, currentLocation.longitude!),
+              zoom: 15,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to get current location'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  LatLngBounds _fitBoundsForMarkers() {
+    final LatLngBounds bounds = _getBounds(_markers);
+    mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, 100),
+    );
+    return bounds;
+  }
+
+  // Reload user data
+  void _reloadUserData() {
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      setState(() {
+        userEmail = user.email ?? '';
+      });
+
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (userDoc.exists) {
+          final userData = userDoc.data()!;
+          setState(() {
+            displayName = userData['name'] ?? _formatEmailToName(userEmail);
+            username = displayName;
+
+            // Get profile image path and last update time
+            final newProfilePath = userData['profileImagePath'];
+            final lastUpdateStr = userData['profileImageLastUpdated'];
+
+            if (newProfilePath != null && lastUpdateStr != null) {
+              final lastUpdate = DateTime.parse(lastUpdateStr);
+
+              // Only update if we have a new image or if this is a fresh load
+              if (_profileImagePath != newProfilePath ||
+                  _lastProfileUpdate == null ||
+                  lastUpdate.isAfter(_lastProfileUpdate!)) {
+                _profileImagePath = newProfilePath;
+                _lastProfileUpdate = lastUpdate;
+                _loadProfilePicture(newProfilePath);
+              }
+            }
+          });
+        }
+      } catch (e) {
+        print('Error fetching user data: $e');
+        setState(() {
+          displayName = _formatEmailToName(userEmail);
+          username = displayName;
+        });
+      }
+    }
+  }
+
+  String _formatEmailToName(String email) {
+    if (email.isEmpty) return '';
+
+    // Get the part before @ symbol
+    String namePart = email.split('@')[0];
+
+    // Split by common separators (dots, underscores, numbers)
+    List<String> parts = namePart
+        .replaceAll(RegExp(r'[0-9]'), ' ')
+        .replaceAll('_', ' ')
+        .replaceAll('.', ' ')
+        .split(' ')
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    // Capitalize each part
+    parts = parts.map((part) {
+      if (part.isEmpty) return '';
+      return part[0].toUpperCase() + part.substring(1).toLowerCase();
+    }).toList();
+
+    // Join the parts with a space
+    return parts.join(' ');
+  }
+
+  Future<void> getUserLocationUpdates() async {
+    bool _serviceEnabled;
+    loc.PermissionStatus _permissionGranted;
+
+    _serviceEnabled = await _locationController.serviceEnabled();
+    if (!_serviceEnabled) {
+      _serviceEnabled = await _locationController.requestService();
+      if (!_serviceEnabled) {
+        return;
+      }
+    }
+
+    _permissionGranted = await _locationController.hasPermission();
+    if (_permissionGranted == loc.PermissionStatus.denied) {
+      _permissionGranted = await _locationController.requestPermission();
+      if (_permissionGranted != loc.PermissionStatus.granted) {
+        return;
+      }
+    }
+
+    _locationController.onLocationChanged
+        .listen((loc.LocationData currentLocation) {
+      if (currentLocation.latitude != null &&
+          currentLocation.longitude != null) {
+        setState(() {
+          _currentPosition =
+              LatLng(currentLocation.latitude!, currentLocation.longitude!);
+        });
+        print(_currentPosition);
+      }
+    });
+  }
+
+  // Getter for pages to dynamically reflect username changes
+  List<Widget> get _pages => <Widget>[
+        // Locations Tab
+        Builder(
+          builder: (context) => Stack(
+            children: [
+              _buildMapTab(),
+              if (_isLoading)
+                Container(
+                  color: Colors.black54,
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        // List Tab
+        _buildExploreContent(),
+
+        // Settings Tab
+        Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 5),
+              Text(
+                username,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              _animatedButton('Edit Profile', _navigateToEditProfile),
+              _animatedButton('Change Password', () {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => ChangePasswordScreen()));
+              }),
+              _animatedButton('Preference', () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const MoodCategoryScreen()),
+                );
+              }),
+              const SizedBox(height: 15),
+              _animatedButton('Logout', () => _showLogoutConfirmation(context),
+                  isLogout: true),
+            ],
+          ),
+        ),
+      ];
+
+  void _showLogoutConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Log out'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close the dialog
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close the dialog
+              _logout();
+            },
+            child: const Text('Log Out'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _logout() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error logging out: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  void _navigateToEditProfile() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditProfileScreen(
+          initialName: username,
+          onProfileUpdated: () {
+            _loadUserData(); // Reload user data when profile is updated
+          },
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _loadUserData(); // Reload if profile was updated
+    }
+  }
+
+  Widget _buildProfileImage() {
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white,
+          width: 2,
+        ),
+      ),
+      child: ClipOval(
+        child: _imageFile != null
+            ? Image.file(
+                _imageFile!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return _defaultProfileImage();
+                },
+              )
+            : _defaultProfileImage(),
+      ),
+    );
+  }
+
+  Widget _defaultProfileImage() {
+    return Container(
+      color: Colors.grey[300],
+      child: Icon(
+        Icons.person,
+        size: 40,
+        color: Colors.grey[600],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 1,
+        title: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Container(
+                width: double.infinity,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    // Menu icon
+                    IconButton(
+                      icon: Icon(Icons.menu, color: Colors.grey[600], size: 22),
+                      onPressed: () {
+                        _scaffoldKey.currentState?.openDrawer();
+                      },
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                    ),
+                    // Search field
+                    Expanded(
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Search bars...',
+                          hintStyle: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 15,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            _searchQuery = value;
+                          });
+                          fetchBars();
+                        },
+                      ),
+                    ),
+                    // Filter icon
+                    // IconButton(
+                    //   icon: Icon(Icons.local_bar,
+                    //       color: Colors.grey[600], size: 22),
+                    //   onPressed: () {},
+                    //   padding: const EdgeInsets.all(8),
+                    //   constraints: const BoxConstraints(),
+                    // ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        automaticallyImplyLeading: false,
+      ),
+      drawer: Drawer(
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              Container(
+                padding: const EdgeInsets.only(top: 24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.blue.shade700,
+                      Colors.blue.shade500,
+                    ],
+                  ),
+                ),
+                child: UserAccountsDrawerHeader(
+                  margin: EdgeInsets.zero,
+                  decoration: const BoxDecoration(
+                    color: Colors.transparent,
+                  ),
+                  accountName: Text(
+                    displayName,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  accountEmail: Text(
+                    userEmail,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  currentAccountPicture: Hero(
+                    tag: 'profile_picture',
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 3,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: _imageFile != null
+                            ? Image.file(
+                                _imageFile!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return _defaultProfileImage();
+                                },
+                              )
+                            : _defaultProfileImage(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildDrawerItem(
+                icon: Icons.person_outline,
+                title: 'Edit Profile',
+                onTap: _navigateToEditProfile,
+              ),
+              _buildDrawerItem(
+                icon: Icons.lock_outline,
+                title: 'Change Password',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ChangePasswordScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildDrawerItem(
+                icon: Icons.mood,
+                title: 'Mood Preferences',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const MoodCategoryScreen()),
+                  );
+                },
+              ),
+              _buildDrawerItem(
+                icon: Icons.map,
+                title: 'Show All Bars',
+                onTap: () {
+                  Navigator.pop(context);
+                  _loadAllBars();
+                },
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Divider(height: 1),
+              ),
+              _buildDrawerItem(
+                icon: Icons.logout,
+                title: 'Logout',
+                onTap: () => _showLogoutDialog(context),
+                color: Colors.red.shade700,
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: Stack(
+        children: [
+          _pages[_selectedIndex], // Show the selected page
+          if (_isLoading)
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+            ),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex, // Reflect the current tab
+        onTap: _onItemTapped,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.location_on),
+            label: 'Locations',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.explore),
+            label: 'Explore',
+          ), // I removed the Settings Icon but the functions are inside the Drawer.
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: color ?? Colors.grey[700],
+                  size: 24,
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color ?? Colors.grey[900],
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showLogoutDialog(BuildContext context) async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (!mounted) return;
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                (route) => false,
+              );
+            },
+            child: const Text(
+              'Logout',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Reusable button widget for settings
+
+  Widget _detailRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 22,
+            color: Colors.teal[600], // Changed to teal for a fresh look
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[800],
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Add subtle animation to interactive elements
+  Widget _animatedButton(String label, VoidCallback onPressed,
+      {bool isLogout = false}) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isLogout ? Colors.red[400] : Colors.teal,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+        child: Text(label),
+      ),
+    );
+  }
+
+  Widget _buildExploreContent() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_bars.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'Explore Now',
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Please try again later',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Filter bars based on user preferences and search query
+    List<Bar> filteredBars = _bars.map((doc) {
+      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+      List<String> barFeatures = List<String>.from(data['features'] ?? []);
+
+      // Construct full address
+      String fullAddress = [
+        data['streetAddress'] ?? '',
+        data['barangay'] ?? '',
+        data['municipality'] ?? '',
+        data['province'] ?? '',
+      ].where((part) => part.isNotEmpty).join(', ');
+
+      // Get location data
+      GeoPoint? geoPoint = data['location'] as GeoPoint?;
+      LatLng? location;
+      if (geoPoint != null) {
+        location = LatLng(geoPoint.latitude, geoPoint.longitude);
+      }
+
+      return Bar(
+        name: data['barName'] ?? '',
+        description: data['description'] ?? 'No description available',
+        imageUrl: data['profileImagePath'] ?? 'assets/default_bar.jpg',
+        address: fullAddress,
+        operatingHours: data['operatingHours'] ?? 'Hours not specified',
+        features: barFeatures,
+        contactNumber: data['contactNumber'] ?? '',
+        location: location,
+        rating: (data['rating'] ?? 0.0).toDouble(),
+        reviewCount: (data['reviewCount'] ?? 0) as int,
+      );
+    }).where((bar) {
+      // First filter by selected features
+      if (_selectedFeatures != null && _selectedFeatures!.isNotEmpty) {
+        if (!_selectedFeatures!
+            .every((preference) => bar.features.contains(preference))) {
+          return false;
+        }
+      }
+
+      // Then filter by search query if it exists
+      if (_searchQuery.isNotEmpty) {
+        String searchLower = _searchQuery.toLowerCase();
+        return bar.name.toLowerCase().contains(searchLower) ||
+            bar.description.toLowerCase().contains(searchLower) ||
+            bar.address.toLowerCase().contains(searchLower) ||
+            bar.features
+                .any((feature) => feature.toLowerCase().contains(searchLower));
+      }
+
+      return true;
+    }).toList();
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      itemCount: filteredBars.length,
+      itemBuilder: (context, index) {
+        final bar = filteredBars[index];
+        return _buildBarCard(bar, _bars[index].id);
+      },
+    );
+  }
+
+  void _showReviewDialog(String barId, String barName) {
+    double rating = 3.0;
+    final reviewController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Review $barName'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return IconButton(
+                    icon: Icon(
+                      index < rating ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                      size: 32,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        rating = index + 1.0;
+                      });
+                    },
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reviewController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: 'Write your review here...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (reviewController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please write a review')),
+                  );
+                  return;
+                }
+
+                try {
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Please sign in to leave a review')),
+                    );
+                    return;
+                  }
+
+                  // Get user data
+                  final userDoc = await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .get();
+                  final userName =
+                      userDoc.data()?['name'] ?? user.email ?? 'Anonymous';
+
+                  // Add review to Firestore
+                  await FirebaseFirestore.instance
+                      .collection('bars')
+                      .doc(barId)
+                      .collection('reviews')
+                      .add({
+                    'userId': user.uid,
+                    'userName': userName,
+                    'rating': rating,
+                    'review': reviewController.text.trim(),
+                    'timestamp': FieldValue.serverTimestamp(),
+                  });
+
+                  // Update bar's average rating
+                  final barRef =
+                      FirebaseFirestore.instance.collection('bars').doc(barId);
+                  await FirebaseFirestore.instance
+                      .runTransaction((transaction) async {
+                    final barDoc = await transaction.get(barRef);
+                    if (!barDoc.exists) return;
+
+                    final currentRating = barDoc.data()?['rating'] ?? 0.0;
+                    final currentCount = barDoc.data()?['reviewCount'] ?? 0;
+
+                    final newCount = currentCount + 1;
+                    final newRating =
+                        ((currentRating * currentCount) + rating) / newCount;
+
+                    transaction.update(barRef, {
+                      'rating': newRating,
+                      'reviewCount': newCount,
+                    });
+                  });
+
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Review submitted successfully!')),
+                  );
+
+                  // Refresh the bars list
+                  _loadApprovedBars();
+                } catch (e) {
+                  print('Error submitting review: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content:
+                            Text('Error submitting review. Please try again.')),
+                  );
+                }
+              },
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewsSection(Bar bar, String barId) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 32),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.star, color: Colors.amber, size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  bar.rating.toStringAsFixed(1),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  ' (${bar.reviewCount} reviews)',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+            ElevatedButton.icon(
+              onPressed: () => _showReviewDialog(barId, bar.name),
+              icon: const Icon(Icons.rate_review),
+              label: const Text('Write Review'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('bars')
+              .doc(barId)
+              .collection('reviews')
+              .orderBy('timestamp', descending: true)
+              .limit(3)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Text('Error loading reviews: ${snapshot.error}');
+            }
+
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final reviews = snapshot.data!.docs;
+            if (reviews.isEmpty) {
+              return const Text('No reviews yet. Be the first to review!');
+            }
+
+            return Column(
+              children: reviews.map((review) {
+                final data = review.data() as Map<String, dynamic>;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              data['userName'] ?? 'Anonymous',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            Row(
+                              children: List.generate(5, (index) {
+                                return Icon(
+                                  index < (data['rating'] ?? 0)
+                                      ? Icons.star
+                                      : Icons.star_border,
+                                  color: Colors.amber,
+                                  size: 16,
+                                );
+                              }),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(data['review'] ?? ''),
+                        const SizedBox(height: 4),
+                        if (data['timestamp'] != null)
+                          Text(
+                            DateFormat('MMM d, yyyy').format(
+                              (data['timestamp'] as Timestamp).toDate(),
+                            ),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBarCard(Bar bar, String barId) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: Stack(
+              children: [
+                Image.network(
+                  bar.imageUrl,
+                  height: 200,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Image.asset(
+                      'assets/default_bar.jpg',
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    );
+                  },
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.directions),
+                    onPressed: () {
+                      if (bar.location != null) {
+                        _showDirectionsDialog(bar.location!, bar.name);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('Location not available for this bar'),
+                          ),
+                        );
+                      }
+                    },
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.blue,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  bar.name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  bar.description,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _detailRow(Icons.location_on, bar.address),
+                _detailRow(Icons.access_time, bar.operatingHours),
+                _detailRow(Icons.phone, bar.contactNumber),
+                const SizedBox(height: 16),
+                const Text(
+                  'Features',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: bar.features
+                      .map((feature) => Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.teal[400],
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              feature,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+                _buildReviewsSection(bar, barId),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _loadAllBars() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Clear existing markers
+      _markers.clear();
+
+      // Get all approved bars from Firestore
+      final QuerySnapshot barsSnapshot = await _firestore
+          .collection('bars')
+          .where('status', isEqualTo: 'approved')
+          .get();
+
+      for (var doc in barsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+
+        // Check if location data exists
+        if (data['location'] != null) {
+          final GeoPoint location = data['location'] as GeoPoint;
+          final String barName = data['barName'] as String? ?? 'Unnamed Bar';
+          final List<dynamic> features =
+              data['features'] as List<dynamic>? ?? [];
+          final String description = data['description'] as String? ?? '';
+          final String operatingHours =
+              data['operatingHours'] ?? 'Hours not specified';
+          final String contactNumber =
+              data['contactNumber'] ?? 'No contact provided';
+          final String address = [
+            data['streetAddress'],
+            data['barangay'],
+            data['municipality'],
+            data['province'],
+          ].where((part) => part != null && part.isNotEmpty).join(', ');
+
+          // Create a marker for each bar
+          final Marker marker = Marker(
+            markerId: MarkerId(doc.id),
+            position: LatLng(location.latitude, location.longitude),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueViolet),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => Dialog(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                barName,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(description),
+                        const SizedBox(height: 8),
+                        Text('Address: $address'),
+                        const SizedBox(height: 8),
+                        Text('Hours: $operatingHours'),
+                        const SizedBox(height: 8),
+                        Text('Contact: $contactNumber'),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: features.map((feature) {
+                            return Chip(
+                              label: Text(feature),
+                              backgroundColor: Colors.blue[100],
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              // Add code to show directions here
+                            },
+                            child: const Text(
+                              'Get Directions',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+          setState(() {
+            _markers.add(marker);
+          });
+        }
+      }
+
+      // If markers were added, fit the map to show all of them
+      if (_markers.isNotEmpty) {
+        final bounds = _fitBoundsForMarkers();
+        mapController?.animateCamera(
+          CameraUpdate.newLatLngBounds(bounds, 50),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading bars: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> fetchBars() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      Query query = FirebaseFirestore.instance
+          .collection('bars')
+          .where('status', isEqualTo: 'approved');
+
+      if (_searchQuery.isNotEmpty) {
+        // Convert query to lowercase for case-insensitive search
+        String searchLower = _searchQuery.toLowerCase();
+
+        // Get all bars and filter in memory for complex search
+        QuerySnapshot querySnapshot = await query.get();
+        _bars = querySnapshot.docs.where((doc) {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          String barName = (data['barName'] ?? '').toLowerCase();
+          String description = (data['description'] ?? '').toLowerCase();
+          List<String> features = List<String>.from(data['features'] ?? []);
+          String location =
+              '${data['municipality'] ?? ''} ${data['barangay'] ?? ''}'
+                  .toLowerCase();
+
+          // Search across multiple fields
+          return barName.contains(searchLower) ||
+              description.contains(searchLower) ||
+              features.any(
+                  (feature) => feature.toLowerCase().contains(searchLower)) ||
+              location.contains(searchLower);
+        }).toList();
+      } else {
+        // If no search query, just get all approved bars
+        QuerySnapshot querySnapshot = await query.get();
+        _bars = querySnapshot.docs;
+      }
+
+      // Update markers on the map
+      _updateMapMarkers();
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error fetching bars: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _updateMapMarkers() {
+    setState(() {
+      _markers.clear();
+      for (var doc in _bars) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        GeoPoint location = data['location'] as GeoPoint;
+        String barName = data['barName'] as String;
+
+        _markers.add(
+          Marker(
+            markerId: MarkerId(doc.id),
+            position: LatLng(location.latitude, location.longitude),
+            infoWindow: InfoWindow(
+              title: barName,
+              snippet: '${data['municipality']}, ${data['barangay']}',
+            ),
+            onTap: () => _showBarDetails(doc),
+          ),
+        );
+      }
+    });
+  }
+
+  void _showBarDetails(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    String barName = data['barName'] as String? ?? 'Unnamed Bar';
+    String description =
+        data['description'] as String? ?? 'No description available';
+
+    // Safely construct address
+    String address = [
+      data['streetAddress'],
+      data['barangay'],
+      data['municipality'],
+      data['province'],
+    ].where((part) => part != null && part.isNotEmpty).join(', ');
+
+    String operatingHours =
+        data['operatingHours'] as String? ?? 'Hours not specified';
+    List<String> features = List<String>.from(data['features'] ?? []);
+    String contactNumber =
+        data['contactNumber'] as String? ?? 'No contact provided';
+    GeoPoint? location = data['location'] as GeoPoint?;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      barName,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(description),
+              const SizedBox(height: 8),
+              Text('Address: $address'),
+              const SizedBox(height: 8),
+              Text('Hours: $operatingHours'),
+              const SizedBox(height: 8),
+              Text('Contact: $contactNumber'),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: features.map((feature) {
+                  return Chip(
+                    label: Text(feature),
+                    backgroundColor: Colors.blue[100],
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    if (location != null) {
+                      _showDirectionsDialog(
+                        LatLng(location.latitude, location.longitude),
+                        barName,
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Location information not available'),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text(
+                    'Get Directions',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+        
+  Widget _buildMapTab() {
+    return Stack(
+      children: [
+        GoogleMap(
+          onMapCreated: (GoogleMapController controller) {
+            mapController = controller;
+            _onMapCreated(controller);
+          },
+          initialCameraPosition: _kGooglePlex,
+          markers: _markers,
+          myLocationEnabled: true,
+          myLocationButtonEnabled: false,
+          mapType: MapType.normal,
+          zoomControlsEnabled: true,
+          zoomGesturesEnabled: true,
+          compassEnabled: true,
+          buildingsEnabled: true,
+          trafficEnabled: true,
+          mapToolbarEnabled: true, // Enable the default toolbar for directions
+          rotateGesturesEnabled: true,
+          tiltGesturesEnabled: true,
+        ),
+        if (_isLoading)
+          Container(
+            color: Colors.black54,
+            child: const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+          ),
+        Positioned(
+          bottom: 30,
+          left: 16,
+          child: FloatingActionButton(
+            heroTag: 'locationButton',
+            onPressed: () {
+              _centerOnUserLocation();
+            },
+            backgroundColor: Colors.white,
+            mini: true,
+            child: const Icon(
+              Icons.my_location,
+              color: Colors.black54,
+              size: 26,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
