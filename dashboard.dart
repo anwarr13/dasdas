@@ -37,7 +37,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   GoogleMapController? mapController;
   loc.Location _locationController = loc.Location();
   final PanelController _panelController = PanelController();
-  DocumentSnapshot? _selectedBar;
+  DocumentSnapshot<Map<String, dynamic>>? _selectedBar;
+  bool _isPanelVisible = false;
+  double _panelHeightOpen = 0;
+  double _panelHeightClosed = 0;
 
   FirebaseFirestore _firestore = FirebaseFirestore.instance;
   Set<Marker> _markers = {};
@@ -64,11 +67,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _selectedFeatures = widget.selectedFeatures;
     loadUserData();
-    _setupUserListener(); // Add user listener
+    _setupUserListener();
     getUserLocationUpdates();
-    _loadApprovedBars(); // Load approved bars after initialization
+    _loadApprovedBars();
+
+    // Initialize panel heights after frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      //  _showAllMarkers(); // Add marker after frame is built
+      setState(() {
+        _panelHeightOpen = MediaQuery.of(context).size.height * 0.9;
+        _panelHeightClosed = 0;
+      });
     });
   }
 
@@ -362,21 +370,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  void _showBarDetails(DocumentSnapshot bar) {
+  void _showBarDetails(DocumentSnapshot<Map<String, dynamic>> bar) {
     setState(() {
       _selectedBar = bar;
+      _isPanelVisible = true;
     });
     _panelController.open();
   }
 
-  Widget _buildBarDetailsPanel() {
-    if (_selectedBar == null) return SizedBox.shrink();
+  void _hideBarDetails() {
+    _panelController.close();
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          _selectedBar = null;
+          _isPanelVisible = false;
+        });
+      }
+    });
+  }
 
-    final data = _selectedBar!.data() as Map<String, dynamic>;
+  Widget _buildBarDetailsPanel() {
+    if (_selectedBar == null) return const SizedBox.shrink();
+
+    final data = _selectedBar!.data()!;
+
+    final List<dynamic> features = data['features'] as List<dynamic>? ?? [];
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.only(
+        borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24.0),
           topRight: Radius.circular(24.0),
         ),
@@ -385,181 +409,197 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Colors.grey.withOpacity(0.5),
             spreadRadius: 2,
             blurRadius: 7,
-            offset: Offset(0, 3),
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                margin: EdgeInsets.symmetric(vertical: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            // Bar Image
-            if (data['profileImagePath'] != null)
-              Container(
-                height: 200,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: NetworkImage(data['profileImagePath']),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Bar Name
-                  Text(
-                    data['barName'] ?? 'Unknown Bar',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Handlee',
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  SizedBox(height: 8),
-
-                  // Rating and Review Count
-                  Row(
+                ),
+                // Close button
+                Align(
+                  alignment: Alignment.topRight,
+                  child: IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: _hideBarDetails,
+                  ),
+                ),
+                // Bar content
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.star, color: Colors.amber),
-                      SizedBox(width: 4),
+                      // Bar Image
+                      if (data['profileImagePath'] != null)
+                        Container(
+                          height: 200,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            image: DecorationImage(
+                              image: NetworkImage(
+                                  data['profileImagePath'] as String),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      // Bar Name
                       Text(
-                        '${(data['rating'] ?? 0.0).toStringAsFixed(1)}',
-                        style: TextStyle(fontSize: 16),
+                        data['barName'] as String? ?? 'Unknown Bar',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Handlee',
+                        ),
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(height: 8),
+                      // Rating and Review Count
+                      Row(
+                        children: [
+                          const Icon(Icons.star, color: Colors.amber),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${(data['rating'] as num? ?? 0.0).toStringAsFixed(1)}',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '(${data['reviewCount'] as int? ?? 0} reviews)',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Description
                       Text(
-                        '(${data['reviewCount'] ?? 0} reviews)',
-                        style: TextStyle(color: Colors.grey[600]),
+                        data['description'] as String? ??
+                            'No description available',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Address
+                      _buildInfoRow(
+                        Icons.location_on,
+                        [
+                          data['streetAddress'] as String?,
+                          data['barangay'] as String?,
+                          data['municipality'] as String?,
+                          data['province'] as String?,
+                        ].where((s) => s != null && s.isNotEmpty).join(', '),
+                      ),
+                      const SizedBox(height: 16),
+                      // Operating Hours
+                      //  _buildOperatingHours(operatingHours),
+                      const SizedBox(height: 16),
+                      // Contact Number
+                      _buildInfoRow(
+                        Icons.phone,
+                        data['contactNumber'] as String? ??
+                            'No contact number available',
+                      ),
+                      const SizedBox(height: 16),
+                      // Features
+                      if (features.isNotEmpty) ...[
+                        const Text(
+                          'Features',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: features.map((feature) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .primaryColor
+                                    .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Theme.of(context)
+                                      .primaryColor
+                                      .withOpacity(0.3),
+                                ),
+                              ),
+                              child: Text(
+                                feature.toString(),
+                                style: TextStyle(
+                                  color: Theme.of(context).primaryColor,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      // Get Directions Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            if (data['location'] != null) {
+                              final GeoPoint geoPoint =
+                                  data['location'] as GeoPoint;
+                              final LatLng location = LatLng(
+                                geoPoint.latitude,
+                                geoPoint.longitude,
+                              );
+                              _showDirectionsDialog(
+                                  location, data['barName'] as String? ?? '');
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(context).primaryColor,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Get Directions',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  SizedBox(height: 16),
-
-                  // Description
-                  Text(
-                    data['description'] ?? 'No description available',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                  SizedBox(height: 16),
-
-                  // Address
-                  _buildInfoRow(
-                    Icons.location_on,
-                    [
-                      data['streetAddress'],
-                      data['barangay'],
-                      data['municipality'],
-                      data['province'],
-                    ].where((s) => s != null && s.isNotEmpty).join(', '),
-                  ),
-                  SizedBox(height: 12),
-
-                  // Operating Hours
-                  _buildInfoRow(
-                    Icons.access_time,
-                    data['operatingHours'] ?? 'Hours not specified',
-                  ),
-                  SizedBox(height: 12),
-
-                  // Contact Number
-                  _buildInfoRow(
-                    Icons.phone,
-                    data['contactNumber'] ?? 'No contact number available',
-                  ),
-                  SizedBox(height: 16),
-
-                  // Features
-                  if (data['features'] != null && (data['features'] as List).isNotEmpty) ...[
-                    Text(
-                      'Features',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: (data['features'] as List).map((feature) {
-                        return Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).primaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: Theme.of(context).primaryColor.withOpacity(0.3),
-                            ),
-                          ),
-                          child: Text(
-                            feature.toString(),
-                            style: TextStyle(
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                  SizedBox(height: 24),
-
-                  // Get Directions Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (data['location'] != null) {
-                          final GeoPoint geoPoint = data['location'] as GeoPoint;
-                          final LatLng location = LatLng(
-                            geoPoint.latitude,
-                            geoPoint.longitude,
-                          );
-                          _showDirectionsDialog(location, data['barName']);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Get Directions',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -568,7 +608,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Row(
       children: [
         Icon(icon, color: Colors.grey[600], size: 20),
-        SizedBox(width: 8),
+        const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
@@ -585,10 +625,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadApprovedBars() async {
     setState(() => _isLoading = true);
     try {
-      // Get all approved bars from Firestore
-      final QuerySnapshot barSnapshot = await _firestore
+      // Get all approved bars from Firestore with proper typing
+      final QuerySnapshot<Map<String, dynamic>> barSnapshot = await _firestore
           .collection('bars')
           .where('status', isEqualTo: 'approved')
+          .withConverter<Map<String, dynamic>>(
+            fromFirestore: (snapshot, _) => snapshot.data() ?? {},
+            toFirestore: (data, _) => data,
+          )
           .get();
 
       setState(() {
@@ -596,20 +640,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         // Add markers for each bar
         for (var doc in barSnapshot.docs) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
+
+          // Skip bars that don't match the selected features
+          if (_selectedFeatures != null && _selectedFeatures!.isNotEmpty) {
+            final List<dynamic> barFeatures =
+                data['features'] as List<dynamic>? ?? [];
+            bool hasMatchingFeature = false;
+
+            // Check if the bar has at least one of the selected features
+            for (String feature in _selectedFeatures!) {
+              if (barFeatures.contains(feature)) {
+                hasMatchingFeature = true;
+                break;
+              }
+            }
+
+            // Skip this bar if it doesn't have any matching features
+            if (!hasMatchingFeature) continue;
+          }
 
           // Get bar location
-          if (data['location'] != null) {
-            final GeoPoint geoPoint = data['location'] as GeoPoint;
-            final LatLng position = LatLng(geoPoint.latitude, geoPoint.longitude);
+          final location = data['location'];
+          if (location != null) {
+            final GeoPoint geoPoint = location as GeoPoint;
+            final LatLng position =
+                LatLng(geoPoint.latitude, geoPoint.longitude);
 
             _markers.add(
               Marker(
                 markerId: MarkerId(doc.id),
                 position: position,
                 infoWindow: InfoWindow(
-                  title: data['barName'] as String,
-                  snippet: data['description'] as String,
+                  title: data['barName'] as String? ?? 'Unknown Bar',
                 ),
                 onTap: () => _showBarDetails(doc),
               ),
@@ -719,8 +782,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     for (Marker marker in markers) {
       if (marker.position.latitude < minLat) minLat = marker.position.latitude;
       if (marker.position.latitude > maxLat) maxLat = marker.position.latitude;
-      if (marker.position.longitude < minLng) minLng = marker.position.longitude;
-      if (marker.position.longitude > maxLng) maxLng = marker.position.longitude;
+      if (marker.position.longitude < minLng)
+        minLng = marker.position.longitude;
+      if (marker.position.longitude > maxLng)
+        maxLng = marker.position.longitude;
     }
 
     return LatLngBounds(
@@ -738,174 +803,193 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      body: SlidingUpPanel(
-        controller: _panelController,
-        minHeight: 0,
-        maxHeight: MediaQuery.of(context).size.height * 0.9,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        panel: _buildBarDetailsPanel(),
-        body: Stack(
-          children: [
-            // Map View
-            GoogleMap(
-              onMapCreated: (controller) {
-                setState(() => mapController = controller);
-              },
-              initialCameraPosition: _kGooglePlex,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: false,
-              markers: _markers,
-              mapType: MapType.normal,
-              zoomControlsEnabled: false,
-              buildingsEnabled: true,
-              trafficEnabled: true,
-              tiltGesturesEnabled: true,
-              rotateGesturesEnabled: true,
-              mapToolbarEnabled:
-                  true, // Enable the default toolbar for directions
-              compassEnabled: false,
-            ),
-            if (_isLoading)
-              Container(
-                color: Colors.black54,
-                child: const Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isPanelVisible) {
+          _hideBarDetails();
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        body: SlidingUpPanel(
+          controller: _panelController,
+          minHeight: 0,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+          defaultPanelState: PanelState.CLOSED,
+          backdropEnabled: true,
+          backdropOpacity: 0.5,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          onPanelClosed: () {
+            if (_isPanelVisible) {
+              _hideBarDetails();
+            }
+          },
+          panel: _buildBarDetailsPanel(),
+          body: Stack(
+            children: [
+              // Map View
+              GoogleMap(
+                onMapCreated: (controller) {
+                  setState(() => mapController = controller);
+                },
+                initialCameraPosition: _kGooglePlex,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: false,
+                markers: _markers,
+                mapType: MapType.hybrid,
+                zoomControlsEnabled: false,
+                buildingsEnabled: true,
+                trafficEnabled: true,
+                tiltGesturesEnabled: true,
+                rotateGesturesEnabled: true,
+                mapToolbarEnabled:
+                    true, // Enable the default toolbar for directions
+                compassEnabled: false,
+              ),
+              if (_isLoading)
+                Container(
+                  color: Colors.black54,
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                ),
+
+              // Search Bar
+              Positioned(
+                top: 40,
+                left: 16,
+                right: 16,
+                child: Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.menu),
+                        onPressed: () =>
+                            _scaffoldKey.currentState?.openDrawer(),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          decoration: const InputDecoration(
+                            hintText: 'Search here',
+                            border: InputBorder.none,
+                            contentPadding:
+                                EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                          //          onChanged: _onSearch,
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.grey[200],
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.mic),
+                          onPressed: () {
+                            // Implement voice search
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-            // Search Bar
-            Positioned(
-              top: 40,
-              left: 16,
-              right: 16,
-              child: Container(
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.menu),
-                      onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                    ),
-                    Expanded(
-                      child: TextField(
-                        decoration: const InputDecoration(
-                          hintText: 'Search here',
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                        ),
-                        //          onChanged: _onSearch,
+              // Layer Button
+              Positioned(
+                top: 120,
+                right: 16,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
-                    ),
-                    Container(
-                      margin: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.grey[200],
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.layers),
+                    onPressed: () {
+                      // Implement layer selection
+                    },
+                  ),
+                ),
+              ),
+
+              // Location Button
+              Positioned(
+                right: 16,
+                bottom: 120,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
-                      child: IconButton(
-                        icon: const Icon(Icons.mic),
-                        onPressed: () {
-                          // Implement voice search
-                        },
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.my_location),
+                    onPressed: _centerOnUserLocation,
+                  ),
+                ),
+              ),
+
+              // Bottom Navigation
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildNavButton(
+                        true,
+                        'Explore',
+                        Icons.explore,
                       ),
-                    ),
-                  ],
+                      _buildNavButton(
+                        false,
+                        'Commute',
+                        Icons.home_work,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ),
-
-            // Layer Button
-            Positioned(
-              top: 120,
-              right: 16,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.layers),
-                  onPressed: () {
-                    // Implement layer selection
-                  },
-                ),
-              ),
-            ),
-
-            // Location Button
-            Positioned(
-              right: 16,
-              bottom: 120,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.my_location),
-                  onPressed: _centerOnUserLocation,
-                ),
-              ),
-            ),
-
-            // Bottom Navigation
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                color: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildNavButton(
-                      true,
-                      'Explore',
-                      Icons.explore,
-                    ),
-                    _buildNavButton(
-                      false,
-                      'Commute',
-                      Icons.home_work,
-                    ),
-                  ],
-                ),
-              ),
-            )
-          ],
+              )
+            ],
+          ),
         ),
+        drawer: _buildDrawer(),
       ),
-      drawer: _buildDrawer(),
     );
   }
 

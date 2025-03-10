@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:login_form/main.dart';
+import 'main.dart';
 import 'location_picker_screen.dart';
 import 'package:philippines_rpcmb/philippines_rpcmb.dart';
 
@@ -131,31 +131,132 @@ class _SignupScreenState extends State<SignupScreen> {
     'Monday': OperatingHours(
       openTime: const TimeOfDay(hour: 16, minute: 0),
       closeTime: const TimeOfDay(hour: 2, minute: 0),
+      isOpen: true,
     ),
     'Tuesday': OperatingHours(
       openTime: const TimeOfDay(hour: 16, minute: 0),
       closeTime: const TimeOfDay(hour: 2, minute: 0),
+      isOpen: true,
     ),
     'Wednesday': OperatingHours(
       openTime: const TimeOfDay(hour: 16, minute: 0),
       closeTime: const TimeOfDay(hour: 2, minute: 0),
+      isOpen: true,
     ),
     'Thursday': OperatingHours(
       openTime: const TimeOfDay(hour: 16, minute: 0),
       closeTime: const TimeOfDay(hour: 2, minute: 0),
+      isOpen: true,
     ),
     'Friday': OperatingHours(
       openTime: const TimeOfDay(hour: 16, minute: 0),
       closeTime: const TimeOfDay(hour: 2, minute: 0),
+      isOpen: true,
     ),
     'Saturday': OperatingHours(
       openTime: const TimeOfDay(hour: 16, minute: 0),
       closeTime: const TimeOfDay(hour: 2, minute: 0),
+      isOpen: true,
     ),
     'Sunday': OperatingHours(
       openTime: const TimeOfDay(hour: 16, minute: 0),
       closeTime: const TimeOfDay(hour: 2, minute: 0),
+      isOpen: true,
     ),
+  };
+
+  // Predefined operating hours templates
+  final Map<String, Map<String, OperatingHours>> _operatingHoursTemplates = {
+    'Standard Evening Hours': {
+      'Monday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Tuesday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Wednesday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Thursday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Friday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Saturday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Sunday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+    },
+    'Weekend Only': {
+      'Monday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: false),
+      'Tuesday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: false),
+      'Wednesday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: false),
+      'Thursday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: false),
+      'Friday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Saturday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 3, minute: 0),
+          isOpen: true),
+      'Sunday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+    },
+    'Late Night Hours': {
+      'Monday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 4, minute: 0),
+          isOpen: true),
+      'Tuesday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 4, minute: 0),
+          isOpen: true),
+      'Wednesday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 4, minute: 0),
+          isOpen: true),
+      'Thursday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 4, minute: 0),
+          isOpen: true),
+      'Friday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 5, minute: 0),
+          isOpen: true),
+      'Saturday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 5, minute: 0),
+          isOpen: true),
+      'Sunday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 4, minute: 0),
+          isOpen: true),
+    },
   };
 
   String _formatTimeOfDay(TimeOfDay time) {
@@ -249,118 +350,138 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  Widget _buildOperatingHoursSection() {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const Icon(Icons.access_time, color: Colors.grey),
-                const SizedBox(width: 8),
-                Text(
-                  'Operating Hours',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _operatingHours.length,
-            itemBuilder: (context, index) {
-              final day = _operatingHours.keys.elementAt(index);
-              final hours = _operatingHours[day]!;
-
-              return Column(
-                children: [
-                  ListTile(
-                    leading: SizedBox(
-                      width: 40,
-                      child: Switch(
-                        value: hours.isOpen,
-                        onChanged: (bool value) {
-                          setState(() {
-                            _operatingHours[day] = OperatingHours(
-                              openTime: hours.openTime,
-                              closeTime: hours.closeTime,
-                              isOpen: value,
-                            );
-                          });
+  void _showOperatingHoursDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Set Operating Hours'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Templates dropdown
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: DropdownButtonFormField<String>(
+                        decoration: InputDecoration(
+                          labelText: 'Quick Templates',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _operatingHoursTemplates.keys
+                            .map((String template) {
+                          return DropdownMenuItem<String>(
+                            value: template,
+                            child: Text(template),
+                          );
+                        }).toList(),
+                        onChanged: (String? template) {
+                          if (template != null) {
+                            setState(() {
+                              _operatingHours.clear();
+                              _operatingHours
+                                  .addAll(_operatingHoursTemplates[template]!);
+                            });
+                          }
                         },
                       ),
                     ),
-                    title: Text(
-                      day,
-                      style: TextStyle(
-                        color: hours.isOpen ? Colors.black87 : Colors.grey,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    subtitle: hours.isOpen
-                        ? Row(
-                            children: [
-                              TextButton(
-                                onPressed: () async {
-                                  final time = await _showTimePicker(
-                                    context,
-                                    hours.openTime,
-                                  );
-                                  if (time != null) {
-                                    setState(() {
-                                      _operatingHours[day] = OperatingHours(
-                                        openTime: time,
-                                        closeTime: hours.closeTime,
-                                        isOpen: hours.isOpen,
-                                      );
-                                    });
-                                  }
-                                },
-                                child: Text(_formatTimeOfDay(hours.openTime)),
+                    // Days of the week
+                    ..._operatingHours.entries.map((entry) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 100,
+                              child: Text(entry.key,
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            Switch(
+                              value: entry.value.isOpen,
+                              onChanged: (bool value) {
+                                setState(() {
+                                  _operatingHours[entry.key] =
+                                      entry.value.copyWith(isOpen: value);
+                                });
+                              },
+                            ),
+                            if (entry.value.isOpen) ...[
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    TextButton(
+                                      onPressed: () async {
+                                        final TimeOfDay? newTime =
+                                            await _showTimePicker(
+                                          context,
+                                          entry.value.openTime,
+                                        );
+                                        if (newTime != null) {
+                                          setState(() {
+                                            _operatingHours[entry.key] = entry
+                                                .value
+                                                .copyWith(openTime: newTime);
+                                          });
+                                        }
+                                      },
+                                      child: Text(_formatTimeOfDay(
+                                          entry.value.openTime)),
+                                    ),
+                                    Text(' - '),
+                                    TextButton(
+                                      onPressed: () async {
+                                        final TimeOfDay? newTime =
+                                            await _showTimePicker(
+                                          context,
+                                          entry.value.closeTime,
+                                        );
+                                        if (newTime != null) {
+                                          setState(() {
+                                            _operatingHours[entry.key] = entry
+                                                .value
+                                                .copyWith(closeTime: newTime);
+                                          });
+                                        }
+                                      },
+                                      child: Text(_formatTimeOfDay(
+                                          entry.value.closeTime)),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const Text(' to '),
-                              TextButton(
-                                onPressed: () async {
-                                  final time = await _showTimePicker(
-                                    context,
-                                    hours.closeTime,
-                                  );
-                                  if (time != null) {
-                                    setState(() {
-                                      _operatingHours[day] = OperatingHours(
-                                        openTime: hours.openTime,
-                                        closeTime: time,
-                                        isOpen: hours.isOpen,
-                                      );
-                                    });
-                                  }
-                                },
-                                child: Text(_formatTimeOfDay(hours.closeTime)),
+                            ] else
+                              Expanded(
+                                child: Text('  Closed',
+                                    style: TextStyle(color: Colors.red)),
                               ),
-                            ],
-                          )
-                        : const Text('Closed'),
-                  ),
-                  if (index < _operatingHours.length - 1)
-                    const Divider(height: 1),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -916,7 +1037,10 @@ class _SignupScreenState extends State<SignupScreen> {
                           children: [
                             _buildBarInfoSection(),
                             _buildBarFeaturesSection(),
-                            _buildOperatingHoursSection(),
+                            ElevatedButton(
+                              onPressed: _showOperatingHoursDialog,
+                              child: Text('Set Operating Hours'),
+                            ),
                             _buildLocationSection(),
                           ],
                         ),
@@ -1049,7 +1173,21 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                 ),
 
-              const SizedBox(height: 16)
+              const SizedBox(height: 16),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _showRoleSelection = true;
+                    _isBarOwner = false;
+                    _clearFields();
+                  });
+                },
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Back to Role Selection'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey[700],
+                ),
+              ),
             ],
           ),
         ),

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:login_form/mood_category.dart';
+import 'mood_category.dart';
 import 'signup_screen.dart'; // Import the signup screen
 import 'package:firebase_core/firebase_core.dart'; // Import Firebase core
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase authentication
-
 import 'firebase_options.dart'; // Import the Firebase options
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'superadmin.dart'; // Import the superadmin dashboard

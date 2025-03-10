@@ -6,6 +6,7 @@ import 'package:login_form/main.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'services/notification_service.dart';
+import 'services/email_service.dart';
 
 class SuperAdminDashboard extends StatefulWidget {
   const SuperAdminDashboard({super.key});
@@ -18,6 +19,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final NotificationService _notificationService = NotificationService();
+  final EmailService _emailService = EmailService();
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
   bool _isLoading = true;
@@ -41,6 +43,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       }
 
       final barData = barDoc.data()!;
+
+      // Get the user's email and name
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userData = userDoc.data();
+      final userEmail = userData?['email'] as String?;
+      final ownerName = userData?['name'] as String? ?? 'Bar Owner';
 
       if (isApproved) {
         // Ensure location data is properly formatted
@@ -119,6 +127,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         _mapController?.animateCamera(
           CameraUpdate.newLatLngZoom(location, 15),
         );
+
+        // Send email notification
+        if (userEmail != null) {
+          try {
+            await _emailService.sendApprovalEmail(
+              recipientEmail: userEmail,
+              barName: barData['barName'] ?? 'Your Bar',
+              ownerName: ownerName,
+            );
+          } catch (e) {
+            print('Error sending approval email: $e');
+            // Don't stop the approval process if email fails
+          }
+        }
 
         // Send detailed approval notification
         await _notificationService.sendNotification(
