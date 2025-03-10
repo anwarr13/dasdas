@@ -3,9 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'main.dart';
+import 'package:login_form/main.dart';
 import 'location_picker_screen.dart';
 import 'package:philippines_rpcmb/philippines_rpcmb.dart';
+import 'package:image_picker/image_picker.dart';
 
 /// A class representing the operating hours for a bar
 class OperatingHours {
@@ -168,94 +169,31 @@ class _SignupScreenState extends State<SignupScreen> {
   // Predefined operating hours templates
   final Map<String, Map<String, OperatingHours>> _operatingHoursTemplates = {
     'Standard Evening Hours': {
-      'Monday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: true),
-      'Tuesday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: true),
-      'Wednesday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: true),
-      'Thursday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: true),
-      'Friday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: true),
-      'Saturday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: true),
-      'Sunday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: true),
+      'Monday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
+      'Tuesday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
+      'Wednesday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
+      'Thursday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
+      'Friday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
+      'Saturday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
+      'Sunday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
     },
     'Weekend Only': {
-      'Monday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: false),
-      'Tuesday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: false),
-      'Wednesday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: false),
-      'Thursday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: false),
-      'Friday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: true),
-      'Saturday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 3, minute: 0),
-          isOpen: true),
-      'Sunday': OperatingHours(
-          openTime: TimeOfDay(hour: 16, minute: 0),
-          closeTime: TimeOfDay(hour: 2, minute: 0),
-          isOpen: true),
+      'Monday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: false),
+      'Tuesday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: false),
+      'Wednesday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: false),
+      'Thursday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: false),
+      'Friday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
+      'Saturday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 3, minute: 0), isOpen: true),
+      'Sunday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
     },
     'Late Night Hours': {
-      'Monday': OperatingHours(
-          openTime: TimeOfDay(hour: 20, minute: 0),
-          closeTime: TimeOfDay(hour: 4, minute: 0),
-          isOpen: true),
-      'Tuesday': OperatingHours(
-          openTime: TimeOfDay(hour: 20, minute: 0),
-          closeTime: TimeOfDay(hour: 4, minute: 0),
-          isOpen: true),
-      'Wednesday': OperatingHours(
-          openTime: TimeOfDay(hour: 20, minute: 0),
-          closeTime: TimeOfDay(hour: 4, minute: 0),
-          isOpen: true),
-      'Thursday': OperatingHours(
-          openTime: TimeOfDay(hour: 20, minute: 0),
-          closeTime: TimeOfDay(hour: 4, minute: 0),
-          isOpen: true),
-      'Friday': OperatingHours(
-          openTime: TimeOfDay(hour: 20, minute: 0),
-          closeTime: TimeOfDay(hour: 5, minute: 0),
-          isOpen: true),
-      'Saturday': OperatingHours(
-          openTime: TimeOfDay(hour: 20, minute: 0),
-          closeTime: TimeOfDay(hour: 5, minute: 0),
-          isOpen: true),
-      'Sunday': OperatingHours(
-          openTime: TimeOfDay(hour: 20, minute: 0),
-          closeTime: TimeOfDay(hour: 4, minute: 0),
-          isOpen: true),
+      'Monday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 4, minute: 0), isOpen: true),
+      'Tuesday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 4, minute: 0), isOpen: true),
+      'Wednesday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 4, minute: 0), isOpen: true),
+      'Thursday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 4, minute: 0), isOpen: true),
+      'Friday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 5, minute: 0), isOpen: true),
+      'Saturday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 5, minute: 0), isOpen: true),
+      'Sunday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 4, minute: 0), isOpen: true),
     },
   };
 
@@ -371,8 +309,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           labelText: 'Quick Templates',
                           border: OutlineInputBorder(),
                         ),
-                        items: _operatingHoursTemplates.keys
-                            .map((String template) {
+                        items: _operatingHoursTemplates.keys.map((String template) {
                           return DropdownMenuItem<String>(
                             value: template,
                             child: Text(template),
@@ -382,8 +319,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           if (template != null) {
                             setState(() {
                               _operatingHours.clear();
-                              _operatingHours
-                                  .addAll(_operatingHoursTemplates[template]!);
+                              _operatingHours.addAll(_operatingHoursTemplates[template]!);
                             });
                           }
                         },
@@ -397,16 +333,13 @@ class _SignupScreenState extends State<SignupScreen> {
                           children: [
                             SizedBox(
                               width: 100,
-                              child: Text(entry.key,
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold)),
+                              child: Text(entry.key, style: TextStyle(fontWeight: FontWeight.bold)),
                             ),
                             Switch(
                               value: entry.value.isOpen,
                               onChanged: (bool value) {
                                 setState(() {
-                                  _operatingHours[entry.key] =
-                                      entry.value.copyWith(isOpen: value);
+                                  _operatingHours[entry.key] = entry.value.copyWith(isOpen: value);
                                 });
                               },
                             ),
@@ -416,48 +349,39 @@ class _SignupScreenState extends State<SignupScreen> {
                                   children: [
                                     TextButton(
                                       onPressed: () async {
-                                        final TimeOfDay? newTime =
-                                            await _showTimePicker(
+                                        final TimeOfDay? newTime = await _showTimePicker(
                                           context,
                                           entry.value.openTime,
                                         );
                                         if (newTime != null) {
                                           setState(() {
-                                            _operatingHours[entry.key] = entry
-                                                .value
-                                                .copyWith(openTime: newTime);
+                                            _operatingHours[entry.key] = entry.value.copyWith(openTime: newTime);
                                           });
                                         }
                                       },
-                                      child: Text(_formatTimeOfDay(
-                                          entry.value.openTime)),
+                                      child: Text(_formatTimeOfDay(entry.value.openTime)),
                                     ),
                                     Text(' - '),
                                     TextButton(
                                       onPressed: () async {
-                                        final TimeOfDay? newTime =
-                                            await _showTimePicker(
+                                        final TimeOfDay? newTime = await _showTimePicker(
                                           context,
                                           entry.value.closeTime,
                                         );
                                         if (newTime != null) {
                                           setState(() {
-                                            _operatingHours[entry.key] = entry
-                                                .value
-                                                .copyWith(closeTime: newTime);
+                                            _operatingHours[entry.key] = entry.value.copyWith(closeTime: newTime);
                                           });
                                         }
                                       },
-                                      child: Text(_formatTimeOfDay(
-                                          entry.value.closeTime)),
+                                      child: Text(_formatTimeOfDay(entry.value.closeTime)),
                                     ),
                                   ],
                                 ),
                               ),
                             ] else
                               Expanded(
-                                child: Text('  Closed',
-                                    style: TextStyle(color: Colors.red)),
+                                child: Text('  Closed', style: TextStyle(color: Colors.red)),
                               ),
                           ],
                         ),
@@ -568,6 +492,7 @@ class _SignupScreenState extends State<SignupScreen> {
       _selectedFeatures.clear();
       _isLoading = false;
       _selectedBirthdate = null;
+      _permitImagePath = null;
     });
 
     _formKey.currentState?.reset();
@@ -591,6 +516,15 @@ class _SignupScreenState extends State<SignupScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter your business permit number.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      if (_isBarOwner && _permitImagePath == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please attach a photo of your business permit.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -665,6 +599,7 @@ class _SignupScreenState extends State<SignupScreen> {
             'operatingHours': operatingHoursData,
             'features': _selectedFeatures.toList(),
             'permitNumber': _permitNumberController.text,
+            'permitImagePath': _permitImagePath,
             'location': locationGeoPoint,
             'address': {
               'street': _streetAddressController.text,
@@ -1024,23 +959,38 @@ class _SignupScreenState extends State<SignupScreen> {
                     children: [
                       // Step 1: Personal and Account Information
                       SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Column(
                           children: [
                             _buildPersonalInfoSection(),
+                            const SizedBox(height: 32),
                             _buildAccountInfoSection(),
                           ],
                         ),
                       ),
                       // Step 2: Bar Details
                       SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Column(
                           children: [
                             _buildBarInfoSection(),
+                            const SizedBox(height: 32),
                             _buildBarFeaturesSection(),
+                            const SizedBox(height: 32),
                             ElevatedButton(
                               onPressed: _showOperatingHoursDialog,
                               child: Text('Set Operating Hours'),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
                             ),
+                            const SizedBox(height: 32),
                             _buildLocationSection(),
                           ],
                         ),
@@ -1052,7 +1002,9 @@ class _SignupScreenState extends State<SignupScreen> {
                 Column(
                   children: [
                     _buildPersonalInfoSection(),
+                    const SizedBox(height: 32),
                     _buildAccountInfoSection(),
+                    const SizedBox(height: 32),
                   ],
                 ),
 
@@ -1305,6 +1257,7 @@ class _SignupScreenState extends State<SignupScreen> {
     IconData? icon,
   }) {
     return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1395,6 +1348,8 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  String? _permitImagePath;
+
   Widget _buildPersonalInfoSection() {
     return _buildSectionContainer(
       title: 'Personal Information',
@@ -1422,7 +1377,7 @@ class _SignupScreenState extends State<SignupScreen> {
             return null;
           },
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         TextFormField(
           controller: _middleNameController,
           decoration: InputDecoration(
@@ -1437,7 +1392,7 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
           textCapitalization: TextCapitalization.words,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         TextFormField(
           controller: _lastNameController,
           decoration: InputDecoration(
@@ -1461,9 +1416,9 @@ class _SignupScreenState extends State<SignupScreen> {
             return null;
           },
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         _buildBirthdateField(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         DropdownButtonFormField<String>(
           value: _selectedGender,
           decoration: InputDecoration(
@@ -1525,7 +1480,7 @@ class _SignupScreenState extends State<SignupScreen> {
             return null;
           },
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         TextFormField(
           controller: _passwordController,
           decoration: InputDecoration(
@@ -1555,7 +1510,7 @@ class _SignupScreenState extends State<SignupScreen> {
           obscureText: !_isPasswordVisible,
           validator: _validatePassword,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         TextFormField(
           controller: _retypePasswordController,
           decoration: InputDecoration(
@@ -1630,19 +1585,51 @@ class _SignupScreenState extends State<SignupScreen> {
         const SizedBox(height: 16),
         TextFormField(
           controller: _permitNumberController,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Business Permit Number',
-            prefixIcon: Icon(Icons.badge),
+            prefixIcon: const Icon(Icons.badge),
             hintText: 'Enter your business permit number',
+            suffixIcon: _permitImagePath != null
+              ? Icon(Icons.check_circle, color: Colors.green)
+              : null,
           ),
           validator: (value) {
             if (value == null || value.isEmpty) {
               return 'Please enter your business permit number';
             }
-            // Add any specific permit number format validation if needed
+            if (_permitImagePath == null) {
+              return 'Please attach a photo of your business permit';
+            }
             return null;
           },
         ),
+        const SizedBox(height: 8),
+        ElevatedButton.icon(
+          onPressed: () async {
+            // Add image picker functionality
+            final ImagePicker _picker = ImagePicker();
+            final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+            
+            if (image != null) {
+              setState(() {
+                _permitImagePath = image.path;
+              });
+            }
+          },
+          icon: Icon(Icons.upload_file),
+          label: Text(_permitImagePath != null ? 'Change Permit Photo' : 'Upload Permit Photo'),
+          style: ElevatedButton.styleFrom(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+        ),
+        if (_permitImagePath != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Permit photo uploaded successfully',
+              style: TextStyle(color: Colors.green, fontSize: 12),
+            ),
+          ),
         const SizedBox(height: 16),
         TextFormField(
           controller: _descriptionController,
