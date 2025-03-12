@@ -169,31 +169,94 @@ class _SignupScreenState extends State<SignupScreen> {
   // Predefined operating hours templates
   final Map<String, Map<String, OperatingHours>> _operatingHoursTemplates = {
     'Standard Evening Hours': {
-      'Monday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
-      'Tuesday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
-      'Wednesday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
-      'Thursday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
-      'Friday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
-      'Saturday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
-      'Sunday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
+      'Monday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Tuesday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Wednesday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Thursday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Friday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Saturday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Sunday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
     },
     'Weekend Only': {
-      'Monday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: false),
-      'Tuesday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: false),
-      'Wednesday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: false),
-      'Thursday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: false),
-      'Friday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
-      'Saturday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 3, minute: 0), isOpen: true),
-      'Sunday': OperatingHours(openTime: TimeOfDay(hour: 16, minute: 0), closeTime: TimeOfDay(hour: 2, minute: 0), isOpen: true),
+      'Monday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: false),
+      'Tuesday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: false),
+      'Wednesday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: false),
+      'Thursday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: false),
+      'Friday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
+      'Saturday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 3, minute: 0),
+          isOpen: true),
+      'Sunday': OperatingHours(
+          openTime: TimeOfDay(hour: 16, minute: 0),
+          closeTime: TimeOfDay(hour: 2, minute: 0),
+          isOpen: true),
     },
     'Late Night Hours': {
-      'Monday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 4, minute: 0), isOpen: true),
-      'Tuesday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 4, minute: 0), isOpen: true),
-      'Wednesday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 4, minute: 0), isOpen: true),
-      'Thursday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 4, minute: 0), isOpen: true),
-      'Friday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 5, minute: 0), isOpen: true),
-      'Saturday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 5, minute: 0), isOpen: true),
-      'Sunday': OperatingHours(openTime: TimeOfDay(hour: 20, minute: 0), closeTime: TimeOfDay(hour: 4, minute: 0), isOpen: true),
+      'Monday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 4, minute: 0),
+          isOpen: true),
+      'Tuesday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 4, minute: 0),
+          isOpen: true),
+      'Wednesday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 4, minute: 0),
+          isOpen: true),
+      'Thursday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 4, minute: 0),
+          isOpen: true),
+      'Friday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 5, minute: 0),
+          isOpen: true),
+      'Saturday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 5, minute: 0),
+          isOpen: true),
+      'Sunday': OperatingHours(
+          openTime: TimeOfDay(hour: 20, minute: 0),
+          closeTime: TimeOfDay(hour: 4, minute: 0),
+          isOpen: true),
     },
   };
 
@@ -309,7 +372,8 @@ class _SignupScreenState extends State<SignupScreen> {
                           labelText: 'Quick Templates',
                           border: OutlineInputBorder(),
                         ),
-                        items: _operatingHoursTemplates.keys.map((String template) {
+                        items: _operatingHoursTemplates.keys
+                            .map((String template) {
                           return DropdownMenuItem<String>(
                             value: template,
                             child: Text(template),
@@ -319,7 +383,8 @@ class _SignupScreenState extends State<SignupScreen> {
                           if (template != null) {
                             setState(() {
                               _operatingHours.clear();
-                              _operatingHours.addAll(_operatingHoursTemplates[template]!);
+                              _operatingHours
+                                  .addAll(_operatingHoursTemplates[template]!);
                             });
                           }
                         },
@@ -333,13 +398,16 @@ class _SignupScreenState extends State<SignupScreen> {
                           children: [
                             SizedBox(
                               width: 100,
-                              child: Text(entry.key, style: TextStyle(fontWeight: FontWeight.bold)),
+                              child: Text(entry.key,
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
                             ),
                             Switch(
                               value: entry.value.isOpen,
                               onChanged: (bool value) {
                                 setState(() {
-                                  _operatingHours[entry.key] = entry.value.copyWith(isOpen: value);
+                                  _operatingHours[entry.key] =
+                                      entry.value.copyWith(isOpen: value);
                                 });
                               },
                             ),
@@ -349,39 +417,48 @@ class _SignupScreenState extends State<SignupScreen> {
                                   children: [
                                     TextButton(
                                       onPressed: () async {
-                                        final TimeOfDay? newTime = await _showTimePicker(
+                                        final TimeOfDay? newTime =
+                                            await _showTimePicker(
                                           context,
                                           entry.value.openTime,
                                         );
                                         if (newTime != null) {
                                           setState(() {
-                                            _operatingHours[entry.key] = entry.value.copyWith(openTime: newTime);
+                                            _operatingHours[entry.key] = entry
+                                                .value
+                                                .copyWith(openTime: newTime);
                                           });
                                         }
                                       },
-                                      child: Text(_formatTimeOfDay(entry.value.openTime)),
+                                      child: Text(_formatTimeOfDay(
+                                          entry.value.openTime)),
                                     ),
                                     Text(' - '),
                                     TextButton(
                                       onPressed: () async {
-                                        final TimeOfDay? newTime = await _showTimePicker(
+                                        final TimeOfDay? newTime =
+                                            await _showTimePicker(
                                           context,
                                           entry.value.closeTime,
                                         );
                                         if (newTime != null) {
                                           setState(() {
-                                            _operatingHours[entry.key] = entry.value.copyWith(closeTime: newTime);
+                                            _operatingHours[entry.key] = entry
+                                                .value
+                                                .copyWith(closeTime: newTime);
                                           });
                                         }
                                       },
-                                      child: Text(_formatTimeOfDay(entry.value.closeTime)),
+                                      child: Text(_formatTimeOfDay(
+                                          entry.value.closeTime)),
                                     ),
                                   ],
                                 ),
                               ),
                             ] else
                               Expanded(
-                                child: Text('  Closed', style: TextStyle(color: Colors.red)),
+                                child: Text('  Closed',
+                                    style: TextStyle(color: Colors.red)),
                               ),
                           ],
                         ),
@@ -512,15 +589,15 @@ class _SignupScreenState extends State<SignupScreen> {
       }
 
       // Validate permit number for bar owners
-      if (_isBarOwner && _permitNumberController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please enter your business permit number.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
+      // if (_isBarOwner && _permitNumberController.text.isEmpty) {
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     const SnackBar(
+      //       content: Text('Please enter your business permit number.'),
+      //       backgroundColor: Colors.red,
+      //     ),
+      //   );
+      //   return;
+      // }
       if (_isBarOwner && _permitImagePath == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1124,22 +1201,6 @@ class _SignupScreenState extends State<SignupScreen> {
                           ),
                         ),
                 ),
-
-              const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _showRoleSelection = true;
-                    _isBarOwner = false;
-                    _clearFields();
-                  });
-                },
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Back to Role Selection'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.grey[700],
-                ),
-              ),
             ],
           ),
         ),
@@ -1582,34 +1643,14 @@ class _SignupScreenState extends State<SignupScreen> {
           keyboardType: TextInputType.phone,
           validator: _validatePhoneNumber,
         ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _permitNumberController,
-          decoration: InputDecoration(
-            labelText: 'Business Permit Number',
-            prefixIcon: const Icon(Icons.badge),
-            hintText: 'Enter your business permit number',
-            suffixIcon: _permitImagePath != null
-              ? Icon(Icons.check_circle, color: Colors.green)
-              : null,
-          ),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter your business permit number';
-            }
-            if (_permitImagePath == null) {
-              return 'Please attach a photo of your business permit';
-            }
-            return null;
-          },
-        ),
         const SizedBox(height: 8),
         ElevatedButton.icon(
           onPressed: () async {
             // Add image picker functionality
             final ImagePicker _picker = ImagePicker();
-            final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-            
+            final XFile? image =
+                await _picker.pickImage(source: ImageSource.gallery);
+
             if (image != null) {
               setState(() {
                 _permitImagePath = image.path;
@@ -1617,7 +1658,9 @@ class _SignupScreenState extends State<SignupScreen> {
             }
           },
           icon: Icon(Icons.upload_file),
-          label: Text(_permitImagePath != null ? 'Change Permit Photo' : 'Upload Permit Photo'),
+          label: Text(_permitImagePath != null
+              ? 'Change Permit Photo'
+              : 'Upload Permit Photo'),
           style: ElevatedButton.styleFrom(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
