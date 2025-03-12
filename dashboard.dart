@@ -54,12 +54,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // Add this field
   String displayName = '';
+  MapType _currentMapType = MapType.normal;
 
   void onMapCreated(GoogleMapController controller) async {
     setState(() {
       mapController = controller;
     });
     await _loadApprovedBars();
+  }
+
+  void _showMapTypeSelector() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Map Type'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.map_outlined),
+              title: const Text('Default'),
+              selected: _currentMapType == MapType.normal,
+              onTap: () {
+                setState(() => _currentMapType = MapType.normal);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.satellite_alt),
+              title: const Text('Satellite'),
+              selected: _currentMapType == MapType.satellite,
+              onTap: () {
+                setState(() => _currentMapType = MapType.satellite);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.layers),
+              title: const Text('Hybrid'),
+              selected: _currentMapType == MapType.hybrid,
+              onTap: () {
+                setState(() => _currentMapType = MapType.hybrid);
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -394,7 +436,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_selectedBar == null) return const SizedBox.shrink();
 
     final data = _selectedBar!.data()!;
-
+    final Map<String, dynamic> operatingHours = data['operatingHours'] as Map<String, dynamic>? ?? {};
     final List<dynamic> features = data['features'] as List<dynamic>? ?? [];
 
     return Container(
@@ -454,8 +496,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
                             image: DecorationImage(
-                              image: NetworkImage(
-                                  data['profileImagePath'] as String),
+                              image: NetworkImage(data['profileImagePath'] as String),
                               fit: BoxFit.cover,
                             ),
                           ),
@@ -490,8 +531,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 16),
                       // Description
                       Text(
-                        data['description'] as String? ??
-                            'No description available',
+                        data['description'] as String? ?? 'No description available',
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.grey[800],
@@ -510,13 +550,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 16),
                       // Operating Hours
-                      //  _buildOperatingHours(operatingHours),
+                      _buildOperatingHours(operatingHours),
                       const SizedBox(height: 16),
                       // Contact Number
                       _buildInfoRow(
                         Icons.phone,
-                        data['contactNumber'] as String? ??
-                            'No contact number available',
+                        data['contactNumber'] as String? ?? 'No contact number available',
                       ),
                       const SizedBox(height: 16),
                       // Features
@@ -539,14 +578,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .primaryColor
-                                    .withOpacity(0.1),
+                                color: Theme.of(context).primaryColor.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: Theme.of(context)
-                                      .primaryColor
-                                      .withOpacity(0.3),
+                                  color: Theme.of(context).primaryColor.withOpacity(0.3),
                                 ),
                               ),
                               child: Text(
@@ -566,14 +601,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: ElevatedButton(
                           onPressed: () {
                             if (data['location'] != null) {
-                              final GeoPoint geoPoint =
-                                  data['location'] as GeoPoint;
+                              final GeoPoint geoPoint = data['location'] as GeoPoint;
                               final LatLng location = LatLng(
                                 geoPoint.latitude,
                                 geoPoint.longitude,
                               );
-                              _showDirectionsDialog(
-                                  location, data['barName'] as String? ?? '');
+                              _showDirectionsDialog(location, data['barName'] as String? ?? '');
                             }
                           },
                           style: ElevatedButton.styleFrom(
@@ -586,7 +619,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: const Text(
                             'Get Directions',
                             style: TextStyle(
-                              color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
@@ -601,6 +633,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildOperatingHours(Map<String, dynamic> hours) {
+    if (hours.isEmpty) return _buildInfoRow(Icons.access_time, 'Hours not specified');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.access_time, color: Colors.grey[600], size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Operating Hours',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) {
+          final schedule = hours[day.toLowerCase()] as Map<String, dynamic>?;
+          if (schedule == null) return const SizedBox.shrink();
+          
+          return Padding(
+            padding: const EdgeInsets.only(left: 28, bottom: 4),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 80,
+                  child: Text(
+                    day.substring(0, 3), // Show first 3 letters of day
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    schedule['closed'] == true 
+                        ? 'Closed'
+                        : '${schedule['open'] ?? 'N/A'} - ${schedule['close'] ?? 'N/A'}',
+                    style: TextStyle(
+                      color: schedule['closed'] == true ? Colors.red : Colors.grey[800],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
     );
   }
 
@@ -641,13 +730,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Add markers for each bar
         for (var doc in barSnapshot.docs) {
           final data = doc.data();
-
+          
           // Skip bars that don't match the selected features
           if (_selectedFeatures != null && _selectedFeatures!.isNotEmpty) {
-            final List<dynamic> barFeatures =
-                data['features'] as List<dynamic>? ?? [];
+            final List<dynamic> barFeatures = data['features'] as List<dynamic>? ?? [];
             bool hasMatchingFeature = false;
-
+            
             // Check if the bar has at least one of the selected features
             for (String feature in _selectedFeatures!) {
               if (barFeatures.contains(feature)) {
@@ -655,7 +743,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 break;
               }
             }
-
+            
             // Skip this bar if it doesn't have any matching features
             if (!hasMatchingFeature) continue;
           }
@@ -664,8 +752,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final location = data['location'];
           if (location != null) {
             final GeoPoint geoPoint = location as GeoPoint;
-            final LatLng position =
-                LatLng(geoPoint.latitude, geoPoint.longitude);
+            final LatLng position = LatLng(geoPoint.latitude, geoPoint.longitude);
 
             _markers.add(
               Marker(
@@ -673,6 +760,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 position: position,
                 infoWindow: InfoWindow(
                   title: data['barName'] as String? ?? 'Unknown Bar',
+                  snippet: data['description'] as String? ?? '',
                 ),
                 onTap: () => _showBarDetails(doc),
               ),
@@ -782,10 +870,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     for (Marker marker in markers) {
       if (marker.position.latitude < minLat) minLat = marker.position.latitude;
       if (marker.position.latitude > maxLat) maxLat = marker.position.latitude;
-      if (marker.position.longitude < minLng)
-        minLng = marker.position.longitude;
-      if (marker.position.longitude > maxLng)
-        maxLng = marker.position.longitude;
+      if (marker.position.longitude < minLng) minLng = marker.position.longitude;
+      if (marker.position.longitude > maxLng) maxLng = marker.position.longitude;
     }
 
     return LatLngBounds(
@@ -838,7 +924,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 myLocationEnabled: true,
                 myLocationButtonEnabled: false,
                 markers: _markers,
-                mapType: MapType.hybrid,
+                mapType: _currentMapType,
                 zoomControlsEnabled: false,
                 buildingsEnabled: true,
                 trafficEnabled: true,
@@ -880,16 +966,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.menu),
-                        onPressed: () =>
-                            _scaffoldKey.currentState?.openDrawer(),
+                        onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                       ),
                       Expanded(
                         child: TextField(
                           decoration: const InputDecoration(
                             hintText: 'Search here',
                             border: InputBorder.none,
-                            contentPadding:
-                                EdgeInsets.symmetric(horizontal: 16),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 16),
                           ),
                           //          onChanged: _onSearch,
                         ),
@@ -930,9 +1014,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   child: IconButton(
                     icon: const Icon(Icons.layers),
-                    onPressed: () {
-                      // Implement layer selection
-                    },
+                    onPressed: _showMapTypeSelector,
                   ),
                 ),
               ),

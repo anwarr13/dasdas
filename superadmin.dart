@@ -97,8 +97,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         });
 
         // Add new marker for the approved bar
-        final location =
-            LatLng(locationGeoPoint.latitude, locationGeoPoint.longitude);
+        final location = LatLng(locationGeoPoint.latitude, locationGeoPoint.longitude);
         final fullAddress = [
           barData['address']?['street'] ?? '',
           barData['address']?['barangay'] ?? '',
@@ -282,7 +281,7 @@ Need help? Contact our support team anytime.''',
         final data = doc.data() as Map<String, dynamic>;
         final locationData = data['location'];
         GeoPoint? geoPoint;
-
+        
         if (locationData is GeoPoint) {
           geoPoint = locationData;
         } else if (locationData is Map<String, dynamic>) {
@@ -407,10 +406,8 @@ Need help? Contact our support team anytime.''',
           itemBuilder: (context, index) {
             final data = docs[index].data() as Map<String, dynamic>;
             final userId = docs[index].id;
-            final String ownerName =
-                '${data['firstName'] ?? ''} ${data['middleName'] ?? ''} ${data['lastName'] ?? ''}'
-                    .trim();
-
+            final String ownerName = '${data['firstName'] ?? ''} ${data['middleName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+            
             return Container(
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
@@ -502,7 +499,23 @@ Need help? Contact our support team anytime.''',
                           data['address']?['province'] ?? '',
                         ].where((s) => s.isNotEmpty).join(', '),
                       ),
-                      if (data['permitUrl'] != null) ...[
+                      _buildInfoRow(
+                        icon: Icons.numbers,
+                        label: 'Business Permit Number',
+                        value: data['permitNumber'] ?? 'N/A',
+                      ),
+                      _buildInfoRow(
+                        icon: Icons.description,
+                        label: 'Description',
+                        value: data['description'] ?? 'No description provided',
+                      ),
+                      if (data['features']?.isNotEmpty ?? false)
+                        _buildInfoRow(
+                          icon: Icons.star,
+                          label: 'Features',
+                          value: (data['features'] as List<dynamic>).join(', '),
+                        ),
+                      if (data['permitImagePath'] != null) ...[
                         const SizedBox(height: 16),
                         const Text(
                           'Business Permit',
@@ -512,41 +525,77 @@ Need help? Contact our support team anytime.''',
                           ),
                         ),
                         const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            data['permitUrl'],
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(
-                                height: 200,
-                                color: Colors.grey.shade100,
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes !=
-                                            null
-                                        ? loadingProgress
-                                                .cumulativeBytesLoaded /
-                                            loadingProgress.expectedTotalBytes!
-                                        : null,
+                        GestureDetector(
+                          onTap: () => _showPermitImage(
+                            data['permitImagePath'],
+                            data['barName'] ?? 'Unnamed Bar',
+                          ),
+                          child: Container(
+                            height: 200,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    data['permitImagePath'],
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        color: Colors.grey.shade100,
+                                        child: Center(
+                                          child: CircularProgressIndicator(
+                                            value: loadingProgress.expectedTotalBytes != null
+                                                ? loadingProgress.cumulativeBytesLoaded /
+                                                    loadingProgress.expectedTotalBytes!
+                                                : null,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: Colors.grey.shade100,
+                                        child: Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.error_outline,
+                                                color: Colors.red.shade400,
+                                                size: 32,
+                                              ),
+                                              const SizedBox(height: 8),
+                                              const Text(
+                                                'Failed to load image',
+                                                style: TextStyle(color: Colors.red),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                height: 200,
-                                color: Colors.grey.shade100,
-                                child: Center(
-                                  child: Icon(
-                                    Icons.error_outline,
-                                    color: Colors.red.shade400,
-                                    size: 48,
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.zoom_in,
+                                    color: Colors.white,
+                                    size: 36,
                                   ),
                                 ),
-                              );
-                            },
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -608,6 +657,94 @@ Need help? Contact our support team anytime.''',
           },
         );
       },
+    );
+  }
+
+  void _showPermitImage(String imageUrl, String barName) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Business Permit - $barName',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.7,
+                maxWidth: MediaQuery.of(context).size.width * 0.9,
+              ),
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return SizedBox(
+                      height: 300,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 300,
+                      color: Colors.grey.shade100,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Colors.red.shade400,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Failed to load permit image',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
     );
   }
 
@@ -711,6 +848,7 @@ Need help? Contact our support team anytime.''',
                   style: TextStyle(
                     color: Colors.grey.shade600,
                     fontSize: 18,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -719,119 +857,219 @@ Need help? Contact our support team anytime.''',
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
           itemCount: docs.length,
+          padding: const EdgeInsets.all(16),
           itemBuilder: (context, index) {
             final data = docs[index].data() as Map<String, dynamic>;
-            final locationData = data['location'];
-            bool hasValidLocation = false;
+            final String ownerName =
+                '${data['firstName'] ?? ''} ${data['middleName'] ?? ''} ${data['lastName'] ?? ''}'
+                    .trim();
+            final approvalDate = (data['approvalDate'] as Timestamp?)?.toDate();
 
-            if (locationData is GeoPoint) {
-              hasValidLocation = true;
-            } else if (locationData is Map<String, dynamic>) {
-              final lat = locationData['latitude'];
-              final lng = locationData['longitude'];
-              hasValidLocation = lat != null && lng != null;
-            }
-
-            return Card(
+            return Container(
               margin: const EdgeInsets.only(bottom: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.shade200,
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: ExpansionTile(
-                title: Row(
-                  children: [
-                    Icon(
-                      Icons.store,
-                      color: Colors.blue.shade700,
-                      size: 24,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Material(
+                  color: Colors.transparent,
+                  child: ExpansionTile(
+                    tilePadding: const EdgeInsets.all(16),
+                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.store,
+                        color: Colors.green.shade700,
+                        size: 24,
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data['barName'] ?? 'Unnamed Bar',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                    title: Text(
+                      data['barName'] ?? 'Unnamed Bar',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(
+                          'Owner: $ownerName',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
                           ),
+                        ),
+                        if (approvalDate != null) ...[
                           const SizedBox(height: 4),
                           Text(
-                            'Address: ${[
-                              data['streetAddress'] ?? '',
-                              data['barangay'] ?? '',
-                              data['municipality'] ?? '',
-                            ].where((s) => s.isNotEmpty).join(', ')}',
+                            'Approved on: ${approvalDate.toLocal().toString().split(' ')[0]}',
                             style: TextStyle(
                               color: Colors.grey.shade600,
-                              fontSize: 14,
+                              fontSize: 12,
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                  ],
-                ),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildInfoRow(
-                          icon: Icons.email,
-                          label: 'Email',
-                          value: data['email'] ?? 'N/A',
-                        ),
-                        _buildInfoRow(
-                          icon: Icons.phone,
-                          label: 'Contact',
-                          value: data['contactNumber'] ?? 'N/A',
-                        ),
-                        _buildInfoRow(
-                          icon: Icons.location_city,
-                          label: 'Municipality',
-                          value: data['municipality'] ?? 'N/A',
-                        ),
-                        _buildInfoRow(
-                          icon: Icons.badge,
-                          label: 'Permit Number',
-                          value: data['permitNumber'] ?? 'N/A',
-                        ),
-                        if (hasValidLocation)
-                          Container(
-                            margin: const EdgeInsets.only(top: 8),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(8),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'APPROVED',
+                            style: TextStyle(
+                              color: Colors.green.shade800,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12,
                             ),
-                            child: Row(
+                          ),
+                        ),
+                      ],
+                    ),
+                    children: [
+                      _buildInfoRow(
+                        icon: Icons.email,
+                        label: 'Email',
+                        value: data['email'] ?? 'N/A',
+                      ),
+                      _buildInfoRow(
+                        icon: Icons.phone,
+                        label: 'Contact',
+                        value: data['contactNumber'] ?? 'N/A',
+                      ),
+                      _buildInfoRow(
+                        icon: Icons.location_city,
+                        label: 'Address',
+                        value: [
+                          data['address']?['street'] ?? '',
+                          data['address']?['barangay'] ?? '',
+                          data['address']?['municipality'] ?? '',
+                          data['address']?['province'] ?? '',
+                        ].where((s) => s.isNotEmpty).join(', '),
+                      ),
+                      _buildInfoRow(
+                        icon: Icons.numbers,
+                        label: 'Business Permit Number',
+                        value: data['permitNumber'] ?? 'N/A',
+                      ),
+                      _buildInfoRow(
+                        icon: Icons.description,
+                        label: 'Description',
+                        value: data['description'] ?? 'No description provided',
+                      ),
+                      if (data['features']?.isNotEmpty ?? false)
+                        _buildInfoRow(
+                          icon: Icons.star,
+                          label: 'Features',
+                          value: (data['features'] as List<dynamic>).join(', '),
+                        ),
+                      if (data['permitImagePath'] != null) ...[
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Business Permit',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: () => _showPermitImage(
+                            data['permitImagePath'],
+                            data['barName'] ?? 'Unnamed Bar',
+                          ),
+                          child: Container(
+                            height: 200,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
                               children: [
-                                Icon(
-                                  Icons.location_on,
-                                  color: Colors.blue.shade700,
-                                  size: 20,
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    data['permitImagePath'],
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        color: Colors.grey.shade100,
+                                        child: Center(
+                                          child: CircularProgressIndicator(
+                                            value: loadingProgress.expectedTotalBytes != null
+                                                ? loadingProgress.cumulativeBytesLoaded /
+                                                    loadingProgress.expectedTotalBytes!
+                                                : null,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: Colors.grey.shade100,
+                                        child: Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.error_outline,
+                                                color: Colors.red.shade400,
+                                                size: 32,
+                                              ),
+                                              const SizedBox(height: 8),
+                                              const Text(
+                                                'Failed to load image',
+                                                style: TextStyle(color: Colors.red),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Location marked on map',
-                                  style: TextStyle(
-                                    color: Colors.blue.shade700,
-                                    fontWeight: FontWeight.w500,
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.zoom_in,
+                                    color: Colors.white,
+                                    size: 36,
                                   ),
                                 ),
                               ],
                             ),
                           ),
+                        ),
                       ],
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             );
           },
@@ -878,8 +1116,8 @@ Need help? Contact our support team anytime.''',
           for (var doc in snapshot.data!.docs) {
             final data = doc.data() as Map<String, dynamic>;
             final locationData = data['location'];
-            GeoPoint? geoPoint;
-
+            GeoPoint? geoPoint; 
+            
             if (locationData is GeoPoint) {
               geoPoint = locationData;
             } else if (locationData is Map<String, dynamic>) {
